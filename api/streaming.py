@@ -2189,6 +2189,8 @@ def _run_agent_streaming(
     ephemeral=False,
     model_provider=None,
     goal_related=False,
+    routed_model=None,
+    class_label=None,
 ):
     """Run agent in background thread, writing SSE events to STREAMS[stream_id].
 
@@ -2400,7 +2402,10 @@ def _run_agent_streaming(
         s = get_session(session_id)
         update_active_run(stream_id, phase="running", session_id=session_id)
         s.workspace = str(Path(workspace).expanduser().resolve())
-        s.model = model
+        # Only pin the model on the session if it wasn't in auto mode.
+        # Auto sessions revert back to "auto" on completion (see finally block below).
+        if s.model not in ("auto", "__auto__", None, ""):
+            s.model = model
         provider_context = (
             str(model_provider).strip().lower()
             if model_provider is not None
@@ -2831,6 +2836,11 @@ def _run_agent_streaming(
             resolved_model, resolved_provider, resolved_base_url = resolve_model_provider(
                 model_with_provider_context(model, provider_context)
             )
+
+            # ── Notify UI of routing decision so chip can update ──
+            # Only emit when in auto mode (routed_model is set by routes.py smart router).
+            if routed_model:
+                put('model_routed', {'model': resolved_model, 'routed_model': routed_model, 'class_label': class_label or 'MEDIUM'})
 
             # Resolve API key via Hermes runtime provider (matches gateway behaviour).
             # Pass the resolved provider so non-default providers get their own credentials.
@@ -3740,7 +3750,7 @@ def _run_agent_streaming(
                         if m.get('role') == 'user':
                             content = str(m.get('content', ''))
                             # Match if content is part of the sent message or vice-versa
-                            base_text = msg_text.split('\n\n[Attached files:')[0].strip() if '\n\n[Attached files:' in msg_text else msg_text
+                            base_text = msg_text.split('\n\n[Attached files:]')[0].strip() if '\n\n[Attached files:]' in msg_text else msg_text
                             if base_text[:60] in content or content[:60] in msg_text:
                                 m['attachments'] = display_attachments
                                 break
@@ -3752,6 +3762,21 @@ def _run_agent_streaming(
                     for _rm in reversed(s.messages):
                         if isinstance(_rm, dict) and _rm.get('role') == 'assistant':
                             _rm['reasoning'] = _reasoning_text
+                # Tag new assistant messages with routing info
+                _tag_model = routed_model or model
+                for _m in reversed(s.messages):
+                    if not isinstance(_m, dict):
+                        continue
+                    if _m.get('role') == 'user':
+                        break
+                    if _m.get('model'):
+                        break
+                    if _m.get('role') == 'assistant':
+                        _m['model'] = _tag_model
+                        if class_label:
+                            _m['class_label'] = class_label
+                # Revert to auto mode so next query is re-routed by smart router
+                s.model = "auto"
                             break
                 try:
                     _turn_duration_seconds = max(0.0, time.time() - float(_turn_started_at))

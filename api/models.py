@@ -949,7 +949,9 @@ def new_session(workspace=None, model=None, profile=None, model_provider=None, p
             profile = get_active_profile_name()
         except ImportError:
             profile = None
-    effective_model = model or get_effective_default_model()
+    # Start every session in "auto" mode — smart router picks the model per query.
+    # Only use an explicit model if the caller passed one (e.g. user manually selected).
+    effective_model = model if model else "auto"
     wt = worktree_info if isinstance(worktree_info, dict) else None
     workspace_path = (wt.get('path') if wt and wt.get('path') else workspace) if wt else workspace
     s = Session(

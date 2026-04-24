@@ -7186,6 +7186,7 @@ def _handle_goal_command(handler, body):
         if not has_persisted_turns:
             s.profile = requested_profile
 
+
     current_stream_id = getattr(s, "active_stream_id", None)
     stream_running = False
     if current_stream_id:

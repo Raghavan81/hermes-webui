@@ -3674,6 +3674,7 @@ def get_available_models() -> dict:
     if _available_models_cache is None:
         disk_groups = _load_models_cache_from_disk()
 
+
     with _available_models_cache_lock:
         # If another thread is already building, wait for its result instead
         # of re-entering the cold path (avoids duplicate 10s zai load_pool calls).

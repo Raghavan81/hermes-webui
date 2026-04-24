@@ -312,7 +312,7 @@ async function send(){
   try{
     const startData=await api('/api/chat/start',{method:'POST',body:JSON.stringify({
       session_id:activeSid,message:msgText,
-      model:S.session.model||$('modelSelect').value,workspace:S.session.workspace,
+      model:(S.session.model==='auto'||S.session.model==='__auto__')?'__auto__':(S.session.model||$('modelSelect').value),workspace:S.session.workspace,
       model_provider:S.session.model_provider||null,
       profile:S.activeProfile||S.session.profile||'default',
       attachments:uploaded.length?uploaded:undefined
@@ -321,18 +321,22 @@ async function send(){
     if(startData.title) applySessionTitleUpdate(activeSid, startData.title, {provisionalText:displayText.slice(0,64), rememberProvisional:true});
 
     if(startData.effective_model && S.session){
-      S.session.model=startData.effective_model;
-      S.session.model_provider=startData.effective_model_provider||S.session.model_provider||null;
-      localStorage.setItem('hermes-webui-model', startData.effective_model);
-      if(typeof _writePersistedModelState==='function') _writePersistedModelState(startData.effective_model,S.session.model_provider||null);
-      if($('modelSelect')) _applyModelToDropdown(startData.effective_model, $('modelSelect'),S.session.model_provider||null);
-      if(typeof syncTopbar==='function') syncTopbar();
-    }else if(startData.effective_model_provider && S.session){
-      S.session.model_provider=startData.effective_model_provider;
-      if(typeof _writePersistedModelState==='function') _writePersistedModelState(S.session.model||'',S.session.model_provider||null);
-      if($('modelSelect')&&typeof _applyModelToDropdown==='function') _applyModelToDropdown(S.session.model||'', $('modelSelect'), S.session.model_provider||null);
-      if(typeof syncModelChip==='function') syncModelChip();
-      if(typeof syncTopbar==='function') syncTopbar();
+      // If user selected Auto (__auto__), keep Auto selected — don't overwrite with routed model
+      const _currentModel = S.session.model || ($('modelSelect') && $('modelSelect').value);
+      if(_currentModel !== '__auto__'){
+        S.session.model=startData.effective_model;
+        S.session.model_provider=startData.effective_model_provider||S.session.model_provider||null;
+        localStorage.setItem('hermes-webui-model', startData.effective_model);
+        if(typeof _writePersistedModelState==='function') _writePersistedModelState(startData.effective_model,S.session.model_provider||null);
+        if($('modelSelect')) _applyModelToDropdown(startData.effective_model, $('modelSelect'),S.session.model_provider||null);
+        if(typeof syncTopbar==='function') syncTopbar();
+      }else if(startData.effective_model_provider && S.session){
+        S.session.model_provider=startData.effective_model_provider;
+        if(typeof _writePersistedModelState==='function') _writePersistedModelState(S.session.model||'',S.session.model_provider||null);
+        if($('modelSelect')&&typeof _applyModelToDropdown==='function') _applyModelToDropdown(S.session.model||'', $('modelSelect'), S.session.model_provider||null);
+        if(typeof syncModelChip==='function') syncModelChip();
+        if(typeof syncTopbar==='function') syncTopbar();
+      }
     }
     streamId=startData.stream_id;
     S.activeStreamId = streamId;
@@ -978,6 +982,20 @@ function attachLiveStream(activeSid, streamId, uploaded=[], options={}){
       }
       return raw;
     }
+
+    source.addEventListener('model_routed',e=>{
+      try{
+        const d=JSON.parse(e.data);
+        // Update chip to show CLASS • Model (e.g. "COMPLEX • Sonnet 4.6")
+        const chip=$('composerModelChip');
+        const label=document.getElementById('composerModelLabel');
+        const cls=d.class_label||'';
+        const modelName=getModelLabel(d.routed_model||d.model);
+        const display=cls ? cls+' • '+modelName : modelName;
+        if(label) label.textContent=display;
+        if(chip) chip.title='Routed: '+(d.routed_model||d.model)+' ('+cls+')';
+      }catch(_){}
+    });
 
     source.addEventListener('goal',e=>{
       try{

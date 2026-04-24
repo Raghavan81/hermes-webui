@@ -813,8 +813,14 @@ async function populateModelDropdown(){
 
     if(!groups.length) return; // no server groups and no configured fallback
     // Clear existing options
-    sel.innerHTML='';
+    sel.innerHTML=''
     _dynamicModelLabels={};
+    // Always pin Auto (Smart Router) as first option
+    const _autoOpt=document.createElement('option');
+    _autoOpt.value='__auto__';
+    _autoOpt.textContent='⚡ Auto (Smart Router)';
+    _autoOpt.dataset.auto='1';
+    sel.appendChild(_autoOpt);
     for(const g of groups){
       const og=document.createElement('optgroup');
       og.label=g.provider;
@@ -1036,12 +1042,20 @@ function syncModelChip(){
     return;
   }
   const opt=_selectedModelOption();
-  const text=opt?opt.textContent:getModelLabel(sel.value||'');
+  const val=sel.value||'';
+  if(val==='__auto__'){
+    label.textContent='⚡ Auto';
+    if(mobileLabel) mobileLabel.textContent='⚡ Auto';
+    chip.title='Smart Router — picks best model per query';
+    chip.classList.toggle('active',!!(dd&&dd.classList.contains('open')));
+    return;
+  }
+  const text=opt?opt.textContent:getModelLabel(val);
   const gatewayRouting=_latestGatewayRoutingForSession(S.session);
-  const displayText=_formatGatewayModelLabel(sel.value||'',text,gatewayRouting)||text;
+  const displayText=_formatGatewayModelLabel(val,text,gatewayRouting)||text;
   label.textContent=displayText;
   if(mobileLabel) mobileLabel.textContent=displayText;
-  chip.title=gatewayRouting?`${sel.value||'Conversation model'} ${_gatewayRoutingLabel(gatewayRouting)}`:(sel.value||'Conversation model');
+  chip.title=gatewayRouting?`${val||'Conversation model'} ${_gatewayRoutingLabel(gatewayRouting)}`:(val||'Conversation model');
   chip.classList.toggle('active',!!(dd&&dd.classList.contains('open')));
   if(mobileAction) mobileAction.classList.toggle('active',!!(dd&&dd.classList.contains('open')));
 }
@@ -1081,7 +1095,7 @@ function renderModelDropdown(){
         _modelData.push({value:opt.value,name:esc(displayName),id:esc(opt.value),group:child.label||'',badge:_getConfiguredModelBadge(opt.value,_badgeMap,providerId)});
       }
     }
-    if(child.tagName==='OPTION'){
+    if(child.tagName==='OPTION' && child.value!=='__auto__'){
       const rawValue=String(child.value||'');
       const displayName=rawValue.startsWith('@custom:')
         ? getModelLabel(rawValue)
@@ -1180,6 +1194,12 @@ function renderModelDropdown(){
     dd.appendChild(_searchRow);
     dd.appendChild(_custSep);
     dd.appendChild(_custRow);
+    // Pin Auto (Smart Router) at very top, above all groups
+    const _autoRow=document.createElement('div');
+    _autoRow.className='model-opt model-auto-opt'+('__auto__'===sel.value?' active':'');
+    _autoRow.innerHTML=`<span class="model-opt-name">⚡ Auto <span style="font-size:10px;opacity:.6;margin-left:4px">Smart Router</span></span><span class="model-opt-id" style="font-size:10px;color:var(--accent,#7c6af7)">picks best model per query</span>`;
+    _autoRow.onclick=()=>selectModelFromDropdown('__auto__');
+    dd.appendChild(_autoRow);
     if(configuredModels.length){
       const configuredHeading=document.createElement('div');
       configuredHeading.className='model-group';
@@ -2170,6 +2190,7 @@ function _fmtOllamaLabel(mid){
 
 function getModelLabel(modelId){
   if(!modelId) return 'Unknown';
+  if(modelId==='__auto__') return '⚡ Auto';
   const rawId=String(modelId||'');
   // Preserve custom gateway model IDs exactly as configured.
   // Examples:
@@ -2184,7 +2205,7 @@ function getModelLabel(modelId){
   // Check dynamic labels first, then fall back to splitting the ID
   if(_dynamicModelLabels[modelId]) return _dynamicModelLabels[modelId];
   // Static fallback for common models
-  const STATIC_LABELS={'openai/gpt-5.4-mini':'GPT-5.4 Mini','openai/gpt-4o':'GPT-4o','openai/o3':'o3','openai/o4-mini':'o4-mini','anthropic/claude-sonnet-4.6':'Sonnet 4.6','anthropic/claude-sonnet-4-5':'Sonnet 4.5','anthropic/claude-haiku-3-5':'Haiku 3.5','google/gemini-3.1-pro-preview':'Gemini 3.1 Pro','google/gemini-3-flash-preview':'Gemini 3 Flash','google/gemini-3.1-flash-lite-preview':'Gemini 3.1 Flash Lite','google/gemini-2.5-pro':'Gemini 2.5 Pro','google/gemini-2.5-flash':'Gemini 2.5 Flash','deepseek/deepseek-v4-flash':'DeepSeek V4 Flash','deepseek/deepseek-v4-pro':'DeepSeek V4 Pro','deepseek/deepseek-chat-v3-0324':'DeepSeek V3 (legacy)','meta-llama/llama-4-scout':'Llama 4 Scout'};
+  const STATIC_LABELS={'openai/gpt-5.4-mini':'GPT-5.4 Mini','openai/gpt-4o':'GPT-4o','openai/o3':'o3','openai/o4-mini':'o4-mini','anthropic/claude-sonnet-4.6':'Sonnet 4.6','anthropic/claude-sonnet-4-5':'Sonnet 4.5','anthropic/claude-haiku-3-5':'Haiku 3.5','google/gemini-3.1-pro-preview':'Gemini 3.1 Pro','google/gemini-3-flash-preview':'Gemini 3 Flash','google/gemini-3.1-flash-lite-preview':'Gemini 3.1 Flash Lite','google/gemini-2.5-pro':'Gemini 2.5 Pro','google/gemini-2.5-flash':'Gemini 2.5 Flash','deepseek/deepseek-v4-flash':'DeepSeek V4 Flash','deepseek/deepseek-v4-pro':'DeepSeek V4 Pro','deepseek/deepseek-chat-v3-0324':'DeepSeek V3 (legacy)','meta-llama/llama-4-scout':'Llama 4 Scout','databricks-claude-sonnet-4-6':'Sonnet 4.6','databricks-claude-haiku-4-5':'Haiku 4.5','databricks-gpt-5-mini':'GPT-5 Mini'};
   if(STATIC_LABELS[modelId]) return STATIC_LABELS[modelId];
   // Safe Ollama-tag fallback formatter before generic split('/').pop()
   let _last = modelId.split('/').pop() || modelId;
@@ -4354,6 +4375,8 @@ function syncTopbar(){
   // S._pendingProfileModel is set by switchToProfile() and cleared here after one application.
   const modelOverride=S._pendingProfileModel;
   let currentModel=S.session.model||'';
+  // Map server-side "auto" sentinel back to the UI "__auto__" option
+  if(currentModel==='auto') currentModel='__auto__';
   if(modelOverride){
     S._pendingProfileModel=null;
     const providerOverride=S._pendingProfileModelProvider||null;
@@ -5424,10 +5447,13 @@ function renderMessages(options){
       else if(window._showThinking!==false) seg.insertAdjacentHTML('beforeend', _thinkingCardHtml(thinkingText));
     }
     const hasVisibleBody=!!(String(content||'').trim()||filesHtml||statusHtml);
+    const routeBadge=(m.class_label&&m.model&&!isUser)
+      ? `<div class="route-badge">${esc(m.class_label)} &bull; ${esc(getModelLabel(m.model))}</div>`
+      : '';
     if(statusHtml){
       seg.insertAdjacentHTML('beforeend', statusHtml);
     }else if(hasVisibleBody){
-      seg.insertAdjacentHTML('beforeend', `${filesHtml}<div class="msg-body">${bodyHtml}</div>${footHtml}`);
+      seg.insertAdjacentHTML('beforeend', `${filesHtml}<div class="msg-body">${bodyHtml}</div>${routeBadge}${footHtml}`);
     }else if(!(thinkingText&&window._showThinking!==false&&!isSimplifiedToolCalling())){
       seg.classList.add('assistant-segment-anchor');
     }

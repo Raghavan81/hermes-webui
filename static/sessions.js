@@ -404,8 +404,10 @@ async function newSession(flash, options={}){
   const newModelState=(canQualify&&typeof _modelStateForSelect==='function')
     ? _modelStateForSelect(modelSel,selectedDefaultModel)
     : {model:selectedDefaultModel,model_provider:null};
+  // Map __auto__ sentinel to 'auto' for the server
+  const _resolvedModel=newModelState.model==='__auto__'?'auto':newModelState.model;
   const reqBody={
-    model:newModelState.model,
+    model:_resolvedModel,
     model_provider:newModelState.model_provider||null,
     workspace:inheritWs,
     profile:S.activeProfile||'default',
