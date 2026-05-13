@@ -39,3 +39,6 @@ Thumbs.db
 docs/*
 !docs/ui-ux/
 !docs/ui-ux/**
+
+# Ignore Windows Zone.Identifier files
+*.Zone.Identifier
