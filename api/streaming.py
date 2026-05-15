@@ -3777,7 +3777,6 @@ def _run_agent_streaming(
                             _m['class_label'] = class_label
                 # Revert to auto mode so next query is re-routed by smart router
                 s.model = "auto"
-                            break
                 try:
                     _turn_duration_seconds = max(0.0, time.time() - float(_turn_started_at))
                 except Exception:
